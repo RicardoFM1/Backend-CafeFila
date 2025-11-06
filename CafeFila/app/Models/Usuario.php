@@ -6,11 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 
 class Usuario extends Model
 {
-    protected $database = "usuarios";
+    protected $table = "usuarios";
 
     protected $primaryKey = "id";
 
     public $timestamps = false;
 
-    
+
 }
