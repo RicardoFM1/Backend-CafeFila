@@ -148,7 +148,7 @@ class UsuarioController extends Controller
         }
     }
 
-    // 🔹 Login
+
     public function login(Request $request)
     {
         try {

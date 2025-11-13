@@ -22,7 +22,10 @@ class ComprasRequest extends FormRequest
     public function rules(): array
     {
         return [
-            //
+           "usuario_id" => "required | integer | exists:usuarios,id",
+           "item" => "required",
+            "quantidade" => "required | min:1"
         ];
     }
+    
 }
