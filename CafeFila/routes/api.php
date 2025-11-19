@@ -24,11 +24,15 @@ Route::middleware('jwt')->group(function () {
 
    
     Route::prefix('/fila')->group(function () {
-        Route::get('', [FilaController::class, 'listar']);
-        Route::get('/{pos}', [FilaController::class, 'buscarPorPosicao']);
-        Route::post('/entrar', [FilaController::class, 'entrarNaFila']);
-        Route::delete('/sair/{usuario_id}', [FilaController::class, 'sairDaFila']);
-    });
+    Route::get('', [FilaController::class, 'listar']);
+    Route::get('/{pos}', [FilaController::class, 'buscarPorPosicao']);
+    Route::post('/entrar', [FilaController::class, 'entrarNaFila']);
+    Route::delete('/sair/{usuario_id}', [FilaController::class, 'sairDaFila']);
+
+
+    Route::post('/concluir/{usuario_id}', [FilaController::class, 'concluirEVoltarParaFinal']);
+});
+
 
  
     Route::prefix('/compras')->group(function () {

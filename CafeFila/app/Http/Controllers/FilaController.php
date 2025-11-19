@@ -77,6 +77,54 @@ class FilaController extends Controller
             ], 500);
         }
     }
+    public function concluirEVoltarParaFinal($usuario_id)
+{
+    DB::beginTransaction();
+
+    try {
+      
+        $fila = Fila::where('usuario_id', $usuario_id)->first();
+
+        if (!$fila) {
+            return response()->json([
+                'message' => 'Usuário não encontrado na fila.'
+            ], 404);
+        }
+
+        $posicaoAntiga = $fila->posicao;
+
+     
+        $fila->delete();
+
+        Fila::where('posicao', '>', $posicaoAntiga)->decrement('posicao');
+
+       
+        $novaPosicao = (Fila::max('posicao') ?? 0) + 1;
+
+    
+        Fila::create([
+            'usuario_id' => $usuario_id,
+            'posicao' => $novaPosicao
+        ]);
+
+        DB::commit();
+
+        return response()->json([
+            'message' => 'Usuário movido para o final da fila com sucesso!',
+            'nova_posicao' => $novaPosicao
+        ], 200);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+
+        return response()->json([
+            'message' => 'Erro ao mover usuário para o final da fila.',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
+
+
     public function sairDaFila($usuario_id)
 {
     DB::beginTransaction();
