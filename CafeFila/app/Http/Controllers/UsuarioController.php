@@ -7,9 +7,40 @@ use App\Models\Usuario;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Tymon\JWTAuth\Facades\JWTAuth;
+use Tymon\JWTAuth\Exceptions\TokenExpiredException;
+use Tymon\JWTAuth\Exceptions\TokenInvalidException;
+use Tymon\JWTAuth\Exceptions\JWTException;
 
 class UsuarioController extends Controller
 {
+    public function me()
+    {
+        try {
+            $usuario = JWTAuth::parseToken()->authenticate();
+
+            if (!$usuario) {
+                return response()->json(['message' => 'Usuário não encontrado.'], 404);
+            }
+
+            return response()->json([
+                'id' => $usuario->id,
+                'email' => $usuario->email,
+                'admin' => $usuario->admin,
+                'status' => $usuario->status,
+            ], 200);
+
+        } catch (TokenExpiredException $e) {
+            return response()->json(['message' => 'Token expirado.'], 401);
+        } catch (TokenInvalidException $e) {
+            return response()->json(['message' => 'Token inválido.'], 401);
+        } catch (JWTException $e) {
+            return response()->json(['message' => 'Token de autenticação não fornecido.'], 401);
+        } catch (\Exception $e) {
+             return response()->json(['message' => 'Erro interno ao recuperar usuário.', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+
     public function listar()
     {
         try {
@@ -111,8 +142,8 @@ class UsuarioController extends Controller
             
             if (isset($dados['email']) && $dados['email'] !== $usuario->email) {
                  $emailExistente = Usuario::where('email', $dados['email'])
-                    ->where('id', '!=', $id)
-                    ->exists();
+                     ->where('id', '!=', $id)
+                     ->exists();
 
                 if ($emailExistente) {
                     return response()->json([
@@ -126,10 +157,11 @@ class UsuarioController extends Controller
                 $usuario->senha = Hash::make($dados["senha"]);
             }
             
-            // Permite que Admin altere o status/admin de outros, mas o usuário só edita o próprio
             if ($usuarioLogado->admin || $usuarioLogado->id == $id) {
-                $usuario->admin = $dados["admin"] ?? $usuario->admin;
-                $usuario->status = $dados["status"] ?? $usuario->status;
+                if ($usuarioLogado->admin) {
+                    $usuario->admin = $dados["admin"] ?? $usuario->admin;
+                    $usuario->status = $dados["status"] ?? $usuario->status;
+                }
             }
 
             $usuario->save();
@@ -139,6 +171,12 @@ class UsuarioController extends Controller
                 "usuario" => $usuario
             ], 200);
 
+        } catch (TokenExpiredException $e) {
+            return response()->json(['message' => 'Token expirado.'], 401);
+        } catch (TokenInvalidException $e) {
+            return response()->json(['message' => 'Token inválido.'], 401);
+        } catch (JWTException $e) {
+            return response()->json(['message' => 'Token de autenticação não fornecido.'], 401);
         } catch (\Exception $e) {
             return response()->json([
                 "message" => "Erro ao atualizar usuário.",
