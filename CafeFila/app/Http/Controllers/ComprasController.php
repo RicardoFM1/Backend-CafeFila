@@ -20,13 +20,13 @@ class ComprasController extends Controller
             }
 
             if ($request->filled('item')) {
-                // Utiliza 'like' para buscar o item
+              
                 $query->where('item', 'like', '%' . $request->item . '%');
             }
             
-            // O esboço menciona Filtro/Café, então podemos adicionar filtros booleanos se o DB suportar
+            
             if ($request->filled('tipo') && in_array($request->tipo, ['cafe', 'filtro'])) {
-                // Supondo que 'item' armazena o tipo de compra
+               
                 $query->where('item', $request->tipo);
             }
 

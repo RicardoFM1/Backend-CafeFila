@@ -166,9 +166,8 @@ class FilaController extends Controller
             
             Fila::create([
                 'usuario_id' => $usuario_id,
-                'posicao' => $novaPosicao,
-                'cafe' => 0,
-                'filtro' => 0,
+                'posicao' => $novaPosicao
+                
             ]);
 
             DB::commit();
@@ -186,6 +185,52 @@ class FilaController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+    public function atualizarQuantidade(Request $request)
+    {
+        
+        $usuario = JWTAuth::parseToken()->authenticate();
+
+       
+        $request->validate([
+            'tipo' => 'required|in:cafe,filtro',
+            'quantidade' => 'required|integer|min:0', 
+        ]);
+
+        $tipo = $request->tipo;
+        $novaQuantidade = $request->quantidade;
+        
+    
+        $itemFila = Fila::firstOrNew(['usuario_id' => $usuario->id]);
+        
+      
+        if ($tipo === 'filtro' && $novaQuantidade > 0 && $itemFila->cafe <= 0) {
+            
+            if (!$itemFila->exists || ($itemFila->cafe === 0 && $itemFila->filtro > 0)) {
+                return response()->json([
+                    'message' => 'Adicione Café (ou mantenha-o > 0) antes de adicionar Filtro.',
+                ], 400);
+            }
+        }
+
+        
+        $itemFila->{$tipo} = $novaQuantidade;
+        
+       
+        if ($itemFila->isDirty() && !$itemFila->exists) {
+            $itemFila->created_at = now();
+        }
+
+       
+        if ($itemFila->isDirty()) {
+             $itemFila->save();
+        }
+
+
+        return response()->json([
+            'message' => 'Quantidade de ' . $tipo . ' atualizada para ' . $novaQuantidade . ' com sucesso!',
+            'item' => $itemFila
+        ], 200);
     }
 
     public function sairDaFila($usuario_id)
