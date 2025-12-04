@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\FilaRequest;
+use App\Models\Compras;
 use App\Models\Fila;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -132,106 +133,138 @@ class FilaController extends Controller
         }
     }
 
+public function concluirEVoltarParaFinal(Request $request, $usuario_id)
+{
+    DB::beginTransaction();
 
-    public function concluirEVoltarParaFinal(Request $request, $usuario_id)
-    {
-        $comprasController = app(ComprasController::class); 
+    try {
 
-        DB::beginTransaction();
+        $fila = Fila::where('usuario_id', $usuario_id)->first();
 
-        try {
-            $fila = Fila::where('usuario_id', $usuario_id)->first();
-            
-            if (!$fila) {
-                DB::rollBack();
-                return response()->json([
-                    'message' => 'Usuário não encontrado na fila.'
-                ], 404);
-            }
-
-            $primeiroDaFila = Fila::orderBy('posicao', 'asc')->first();
-            if ($fila->id !== $primeiroDaFila->id) {
-                DB::rollBack();
-                return response()->json([
-                    'message' => 'Apenas o primeiro usuário da fila pode registrar a conclusão da compra.'
-                ], 403);
-            }
-
-            $posicaoAntiga = $fila->posicao;
-            $fila->delete();
-            
-            Fila::where('posicao', '>', $posicaoAntiga)->decrement('posicao');
-
-            $novaPosicao = (Fila::max('posicao') ?? 0) + 1;
-            
-            Fila::create([
-                'usuario_id' => $usuario_id,
-                'posicao' => $novaPosicao
-                
-            ]);
-
-            DB::commit();
-
-            return response()->json([
-                'message' => 'Compra concluída e usuário movido para o final da fila com sucesso!',
-                'nova_posicao' => $novaPosicao
-            ], 200);
-
-        } catch (\Exception $e) {
+        if (!$fila) {
             DB::rollBack();
-
             return response()->json([
-                'message' => 'Erro ao concluir a compra e mover o usuário.',
-                'error' => $e->getMessage()
-            ], 500);
+                'message' => 'Usuário não encontrado na fila.'
+            ], 404);
         }
-    }
-    public function atualizarQuantidade(Request $request)
-    {
-        
-        $usuario = JWTAuth::parseToken()->authenticate();
 
-       
-        $request->validate([
-            'tipo' => 'required|in:cafe,filtro',
-            'quantidade' => 'required|integer|min:0', 
+        // Verificar se é o primeiro da fila
+        $primeiro = Fila::orderBy('posicao')->first();
+
+        if ($fila->id !== $primeiro->id) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Apenas o primeiro da fila pode concluir a compra.'
+            ], 403);
+        }
+
+        
+        if ($fila->cafe > 0) {
+            Compras::create([
+                'usuario_id'   => $usuario_id,
+                'item'         => 'cafe',
+                'quantidade'   => $fila->cafe,
+                'data_compra'  => now('America/Sao_Paulo')
+            ]);
+        }
+
+        // Filtro
+        if ($fila->filtro > 0) {
+            Compras::create([
+                'usuario_id'   => $usuario_id,
+                'item'         => 'filtro',
+                'quantidade'   => $fila->filtro,
+                'data_compra'  => now('America/Sao_Paulo')
+            ]);
+        }
+
+        //-------------------------------
+        // PROCESSAR FILA
+        //-------------------------------
+
+        $posicaoRemovida = $fila->posicao;
+
+        $fila->delete();
+
+        // Reordenar posições
+        Fila::where('posicao', '>', $posicaoRemovida)
+            ->decrement('posicao');
+
+        // Nova posição no final
+        $novaPosicao = (Fila::max('posicao') ?? 0) + 1;
+
+        // Criar nova entrada "zerada"
+        $novo = Fila::create([
+            'usuario_id' => $usuario_id,
+            'posicao' => $novaPosicao,
+            'cafe' => 0,
+            'filtro' => 0,
         ]);
 
-        $tipo = $request->tipo;
-        $novaQuantidade = $request->quantidade;
-        
-    
-        $itemFila = Fila::firstOrNew(['usuario_id' => $usuario->id]);
-        
-      
-        if ($tipo === 'filtro' && $novaQuantidade > 0 && $itemFila->cafe <= 0) {
-            
-            if (!$itemFila->exists || ($itemFila->cafe === 0 && $itemFila->filtro > 0)) {
-                return response()->json([
-                    'message' => 'Adicione Café (ou mantenha-o > 0) antes de adicionar Filtro.',
-                ], 400);
-            }
-        }
-
-        
-        $itemFila->{$tipo} = $novaQuantidade;
-        
-       
-        if ($itemFila->isDirty() && !$itemFila->exists) {
-            $itemFila->created_at = now();
-        }
-
-       
-        if ($itemFila->isDirty()) {
-             $itemFila->save();
-        }
-
+        DB::commit();
 
         return response()->json([
-            'message' => 'Quantidade de ' . $tipo . ' atualizada para ' . $novaQuantidade . ' com sucesso!',
-            'item' => $itemFila
+            'message' => 'Compra concluída e usuário movido para o final da fila!',
+            'nova_posicao' => $novaPosicao,
+            'dados' => $novo
         ], 200);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return response()->json([
+            'message' => 'Erro ao concluir compra.',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
+
+
+   public function atualizarQuantidade(Request $request)
+{
+    $usuario = JWTAuth::parseToken()->authenticate();
+
+    $request->validate([
+        'tipo' => 'required|in:cafe,filtro',
+        'quantidade' => 'required|integer|min:0',
+    ]);
+
+    $tipo = $request->tipo;
+    $novaQuantidade = $request->quantidade;
+
+    
+    $itemFila = Fila::firstOrNew(['usuario_id' => $usuario->id]);
+
+    
+    if (!$itemFila->exists) {
+        $ultimaPosicao = Fila::max('posicao') ?? 0;
+        $itemFila->posicao = $ultimaPosicao + 1;
+        $itemFila->cafe = 0;
+        $itemFila->filtro = 0;
+    }
+
+
+    if ($tipo === 'filtro' && $novaQuantidade > 0 && $itemFila->cafe <= 0) {
+        return response()->json([
+            'message' => 'Adicione Café antes de adicionar Filtro.',
+        ], 400);
+    }
+
+   
+    $itemFila->{$tipo} = $novaQuantidade;
+
+ 
+    if (!$itemFila->exists) {
+        $itemFila->created_at = now();
+    }
+
+    $itemFila->save();
+
+    return response()->json([
+        'message' => "Quantidade de {$tipo} atualizada para {$novaQuantidade} com sucesso!",
+        'item' => $itemFila
+    ], 200);
+}
+
 
     public function sairDaFila($usuario_id)
     {

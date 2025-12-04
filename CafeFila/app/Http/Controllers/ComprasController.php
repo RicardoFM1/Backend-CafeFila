@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\ComprasRequest;
 use App\Models\Compras;
 use Illuminate\Http\Request;
 use Tymon\JWTAuth\Facades\JWTAuth;
@@ -13,20 +12,17 @@ class ComprasController extends Controller
     {
         try {
             $query = Compras::with(['usuario', 'alteradoPor'])
-                           ->select('compra.*'); 
+                            ->select('compras.*'); // 👈 CORRIGIDO
 
             if ($request->filled('usuario_id')) {
                 $query->where('usuario_id', $request->usuario_id);
             }
 
             if ($request->filled('item')) {
-              
                 $query->where('item', 'like', '%' . $request->item . '%');
             }
-            
-            
+
             if ($request->filled('tipo') && in_array($request->tipo, ['cafe', 'filtro'])) {
-               
                 $query->where('item', $request->tipo);
             }
 
@@ -49,47 +45,56 @@ class ComprasController extends Controller
         }
     }
 
-    public function comprar(ComprasRequest $request)
+    public function comprar(Request $request)
     {
-        try{
-            $validacao = $request->validated();
-            
-            $compra = Compras::create([
-                'usuario_id' => $validacao["usuario_id"],
-                'data_compra' => now('America/Sao_Paulo'),
-                'item' => $validacao["item"],
-                'quantidade' => $validacao["quantidade"],
+        try {
+            // Validação
+            $validacao = $request->validate([
+                'usuario_id' => 'required|integer|exists:usuarios,id',
+                'item'       => 'required|string|in:cafe,filtro',
+                'quantidade' => 'required|integer|min:1'
             ]);
-            
+
+            // Criar registro na tabela
+            $compra = Compras::create([
+                'usuario_id'   => $validacao["usuario_id"],
+                'data_compra'  => now('America/Sao_Paulo'),
+                'item'         => $validacao["item"],
+                'quantidade'   => $validacao["quantidade"],
+            ]);
+
             return response()->json([
                 "message" => "Compra efetuada com sucesso!",
-                "compra" => $compra
+                "compra"  => $compra
             ], 201);
 
-        } catch(\Exception $e){
+        } catch (\Exception $e) {
             return response()->json([
                 "message" => "Erro ao efetuar compra.",
-                "error" => $e->getMessage()
+                "error"   => $e->getMessage()
             ], 500);
         }
     }
-    
+
     public function atualizar(Request $request, $id)
     {
         try {
             $compra = Compras::findOrFail($id);
 
             $usuarioLogado = JWTAuth::parseToken()->authenticate();
-        
+
+            // Permitir edição apenas para admin
             if (!$usuarioLogado || !$usuarioLogado->admin) {
                 return response()->json([
                     'message' => 'Acesso negado. Apenas administradores podem editar compras.'
                 ], 403);
             }
-            
+
+            // Atualizar campos permitidos
             $compra->item = $request->item ?? $compra->item;
             $compra->quantidade = $request->quantidade ?? $compra->quantidade;
-            
+
+            // Auditoria
             $compra->ultima_alteracao_por = $usuarioLogado->id;
             $compra->ultima_alteracao_em = now('America/Sao_Paulo');
 
@@ -97,13 +102,13 @@ class ComprasController extends Controller
 
             return response()->json([
                 'message' => 'Compra atualizada com sucesso.',
-                'data' => $compra
+                'data'    => $compra
             ], 200);
 
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Erro ao atualizar compra.',
-                'error' => $e->getMessage()
+                'error'   => $e->getMessage()
             ], 500);
         }
     }
