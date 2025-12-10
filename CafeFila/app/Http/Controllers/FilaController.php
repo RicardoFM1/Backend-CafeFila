@@ -148,7 +148,7 @@ public function concluirEVoltarParaFinal(Request $request, $usuario_id)
             ], 404);
         }
 
-        // Verificar se é o primeiro da fila
+    
         $primeiro = Fila::orderBy('posicao')->first();
 
         if ($fila->id !== $primeiro->id) {
@@ -168,7 +168,7 @@ public function concluirEVoltarParaFinal(Request $request, $usuario_id)
             ]);
         }
 
-        // Filtro
+       
         if ($fila->filtro > 0) {
             Compras::create([
                 'usuario_id'   => $usuario_id,
@@ -178,22 +178,20 @@ public function concluirEVoltarParaFinal(Request $request, $usuario_id)
             ]);
         }
 
-        //-------------------------------
-        // PROCESSAR FILA
-        //-------------------------------
+       
 
         $posicaoRemovida = $fila->posicao;
 
         $fila->delete();
 
-        // Reordenar posições
+        
         Fila::where('posicao', '>', $posicaoRemovida)
             ->decrement('posicao');
 
-        // Nova posição no final
+     
         $novaPosicao = (Fila::max('posicao') ?? 0) + 1;
 
-        // Criar nova entrada "zerada"
+        
         $novo = Fila::create([
             'usuario_id' => $usuario_id,
             'posicao' => $novaPosicao,

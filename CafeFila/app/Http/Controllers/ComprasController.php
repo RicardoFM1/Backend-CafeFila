@@ -12,7 +12,7 @@ class ComprasController extends Controller
     {
         try {
             $query = Compras::with(['usuario', 'alteradoPor'])
-                            ->select('compras.*'); // 👈 CORRIGIDO
+                             ->select('compras.*'); 
 
             if ($request->filled('usuario_id')) {
                 $query->where('usuario_id', $request->usuario_id);
@@ -35,7 +35,32 @@ class ComprasController extends Controller
 
             $compras = $query->orderBy('data_compra', 'desc')->get();
 
-            return response()->json($compras, 200);
+            $comprasAgrupadas = $compras->groupBy(function($item) {
+                return $item->usuario_id . '-' . substr($item->data_compra, 0, 16); 
+            });
+
+            $resultadoFinal = [];
+            foreach ($comprasAgrupadas as $grupo) {
+                $totalCafe = $grupo->where('item', 'cafe')->sum('quantidade');
+                $totalFiltro = $grupo->where('item', 'filtro')->sum('quantidade');
+
+                $descricaoParts = [];
+                if ($totalCafe > 0) $descricaoParts[] = "Café x$totalCafe";
+                if ($totalFiltro > 0) $descricaoParts[] = "Filtro x$totalFiltro";
+                
+                $primeiroItem = $grupo->first();
+                
+                $resultadoFinal[] = [
+                    'id' => $primeiroItem->id, 
+                    'usuario_id' => $primeiroItem->usuario_id,
+                    'usuario' => $primeiroItem->usuario,
+                    'data' => $primeiroItem->data_compra,
+                    'descricao' => implode(' | ', $descricaoParts),
+                    'total' => $totalCafe + $totalFiltro,
+                ];
+            }
+
+            return response()->json($resultadoFinal, 200);
 
         } catch (\Exception $e) {
             return response()->json([
@@ -45,17 +70,18 @@ class ComprasController extends Controller
         }
     }
 
+
     public function comprar(Request $request)
     {
         try {
-            // Validação
+          
             $validacao = $request->validate([
                 'usuario_id' => 'required|integer|exists:usuarios,id',
                 'item'       => 'required|string|in:cafe,filtro',
                 'quantidade' => 'required|integer|min:1'
             ]);
 
-            // Criar registro na tabela
+         
             $compra = Compras::create([
                 'usuario_id'   => $validacao["usuario_id"],
                 'data_compra'  => now('America/Sao_Paulo'),
@@ -83,18 +109,18 @@ class ComprasController extends Controller
 
             $usuarioLogado = JWTAuth::parseToken()->authenticate();
 
-            // Permitir edição apenas para admin
+          
             if (!$usuarioLogado || !$usuarioLogado->admin) {
                 return response()->json([
                     'message' => 'Acesso negado. Apenas administradores podem editar compras.'
                 ], 403);
             }
 
-            // Atualizar campos permitidos
+          
             $compra->item = $request->item ?? $compra->item;
             $compra->quantidade = $request->quantidade ?? $compra->quantidade;
 
-            // Auditoria
+           
             $compra->ultima_alteracao_por = $usuarioLogado->id;
             $compra->ultima_alteracao_em = now('America/Sao_Paulo');
 

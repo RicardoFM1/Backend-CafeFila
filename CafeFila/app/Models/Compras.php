@@ -20,10 +20,15 @@ class Compras extends Model
     'ultima_alteracao_por',
     'ultima_alteracao_em',
 ];
+
+public function usuario()
+    {
+        return $this->belongsTo(Usuario::class, 'usuario_id'); 
+    }
 public function alteradoPor()
-{
-    return $this->belongsTo(Usuario::class, 'ultima_alteracao_por');
-}
+    {
+        return $this->belongsTo(Usuario::class, 'ultima_alteracao_por');
+    }
 
 
 }
